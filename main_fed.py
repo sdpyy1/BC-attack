@@ -93,15 +93,16 @@ if __name__ == '__main__':
     else:
         raise NotImplementedError
 
-    log = utils.logUtils.init_logger(logging.DEBUG,args.save)
 
     if args.attack == 'lp_attack':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
     args.device = torch.device('cuda:{}'.format(
         args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
-    log.debug(f"运行设备: {args.device}")
     if not os.path.isdir('./' + args.save):
         os.makedirs('./' + args.save)
+    log = utils.logUtils.init_logger(logging.DEBUG,args.save)
+
+    log.debug(f"运行设备: {args.device}")
     print_exp_details(log,args)
     # ----------------------------------------------------------------------------------- Load dataset and split users ----------------------------------------------------------------------------------- #
     if args.dataset == 'mnist':
@@ -162,11 +163,13 @@ if __name__ == '__main__':
     #     1: {2, 4, 6, ...},  # 客户端1的数据索引
     #     ...
     # }
-    # ----------------------------------------------------------------------------------- Load data and sample client ----------------------------------------------------------------------------------- #
+
+    # ----------------------------------------------------------------------------------- Load dataset and split users ----------------------------------------------------------------------------------- #
 
 
 
     # ------------------------------------------------------------------------------------------- Load model -------------------------------------------------------------------------------------------- #
+    log.debug(f"模型选择: {args.model}")
     if args.model == 'VGG' and args.dataset == 'cifar':
         global_model = vgg19_bn().to(args.device)
     elif args.model == 'VGG11' and args.dataset == 'cifar':
@@ -187,7 +190,7 @@ if __name__ == '__main__':
     global_model.train()
 
     # copy weights
-    w_glob = global_model.state_dict()
+    global_weights = global_model.state_dict()
 
     # training
     loss_train = []
@@ -207,11 +210,11 @@ if __name__ == '__main__':
     else:
         backdoor_begin_acc = args.attack_begin
 
-    log.Debug(f"模型acc达到后{backdoor_begin_acc}开始投毒")
+    log.debug(f"模型acc达到后{backdoor_begin_acc}开始投毒")
     central_dataset = central_dataset_iid(dataset_test, args.server_dataset)  # get root dataset for FLTrust
     base_info = get_base_info(args)
-    filename = './' + args.save + '/accuracy_file_{}.txt'.format(base_info)  # log hyperparameters
-    log.Debug(f"文件最终保存位置:{filename}")
+    filename = './' + args.save + '/accuracy_file_{}.txt'.format( base_info)  # log hyperparameters
+    log.debug(f"文件最终保存位置:{filename}")
     if args.init != 'None':  # continue from checkpoint
         param = torch.load(args.init)
         global_model.load_state_dict(param)
@@ -235,7 +238,7 @@ if __name__ == '__main__':
     if args.all_clients:
         log.info("Aggregation over all clients")
         # w_locals存储每个客户端的本地模型参数
-        w_locals = [w_glob for i in range(args.num_users)]
+        w_locals = [global_weights for i in range(args.num_users)]
     for iter in range(args.epochs):
         log.info(f"---------------------------------训练开始:{iter}--------------------------------------------")
         loss_locals = []
@@ -283,9 +286,9 @@ if __name__ == '__main__':
                 local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx])
                 w, loss = local.train(net=copy.deepcopy(global_model).to(args.device))
             if args.defence == 'fld':
-                w_updates.append(get_update2(w, w_glob)) # ignore num_batches_tracked, running_mean, running_var
+                w_updates.append(get_update2(w, global_weights)) # ignore num_batches_tracked, running_mean, running_var
             else:
-                w_updates.append(get_update(w, w_glob))
+                w_updates.append(get_update(w, global_weights))
             if args.all_clients:
                 w_locals[idx] = copy.deepcopy(w)
             else:
@@ -293,43 +296,43 @@ if __name__ == '__main__':
             loss_locals.append(copy.deepcopy(loss))
 
         if args.defence == 'avg':  # no defence
-            w_glob = FedAvg(w_locals)
+            global_weights = FedAvg(w_locals)
         elif args.defence == 'krum':  # single krum
             selected_client = multi_krum(w_updates, 1, args)
-            w_glob = w_locals[selected_client[0]]
+            global_weights = w_locals[selected_client[0]]
         elif args.defence == 'multikrum':
             selected_client = multi_krum(w_updates, args.k, args, multi_k=True)
-            w_glob = FedAvg([w_locals[x] for x in selected_client])
+            global_weights = FedAvg([w_locals[x] for x in selected_client])
         elif args.defence == 'RLR':
-            w_glob = RLR(copy.deepcopy(global_model), w_updates, args)
+            global_weights = RLR(copy.deepcopy(global_model), w_updates, args)
         elif args.defence == 'fltrust':
             local = LocalUpdate(
                 args=args, dataset=dataset_test, idxs=central_dataset)
             fltrust_norm, loss = local.train(
                 net=copy.deepcopy(global_model).to(args.device))
-            fltrust_norm = get_update(fltrust_norm, w_glob)
-            w_glob = fltrust(w_updates, fltrust_norm, w_glob, args)
+            fltrust_norm = get_update(fltrust_norm, global_weights)
+            global_weights = fltrust(w_updates, fltrust_norm, global_weights, args)
         elif args.defence == 'flare':
-            w_glob = flare(w_updates, w_locals, global_model, central_dataset, dataset_test, w_glob, args)
+            global_weights = flare(w_updates, w_locals, global_model, central_dataset, dataset_test, global_weights, args)
         elif args.defence == 'flame':
-            w_glob = flame(w_locals, w_updates, w_glob, args, debug=args.debug)
+            global_weights = flame(w_locals, w_updates, global_weights, args, debug=args.debug)
         elif args.defence == 'flip':
             selected_client = multi_krum(w_updates, args.k, args, multi_k=True)
-            w_glob = FedAvg([w_locals[x] for x in selected_client])
+            global_weights = FedAvg([w_locals[x] for x in selected_client])
         elif args.defence == 'flip_multikrum':
             selected_client = multi_krum(w_updates, args.k, args, multi_k=True)
-            w_glob = FedAvg([w_locals[x] for x in selected_client])
+            global_weights = FedAvg([w_locals[x] for x in selected_client])
         elif args.defence == 'layer_krum':
             w_glob_update = layer_krum(w_updates, args.k, args, multi_k=True)
-            for key, val in w_glob.items():
-                w_glob[key] += w_glob_update[key]
+            for key, val in global_weights.items():
+                global_weights[key] += w_glob_update[key]
 
 
         elif args.defence == 'fld':
             # ignore key.split('.')[-1] == 'num_batches_tracked' or key.split('.')[-1] == 'running_mean' or key.split('.')[-1] == 'running_var'
             N = 5
             args.N = N
-            weight = parameters_dict_to_vector_flt(w_glob)
+            weight = parameters_dict_to_vector_flt(global_weights)
             local_update_list = []
             for local in w_updates:
                 local_update_list.append(-1*parameters_dict_to_vector_flt(local).cpu()) # change to 1 dimension
@@ -359,7 +362,7 @@ if __name__ == '__main__':
                 hvp = None
                 new_w_glob = FedAvg(w_locals)  # avg
 
-            update = get_update2(w_glob, new_w_glob)  # w_t+1 = w_t - a*g_t => g_t = w_t - w_t+1 (a=1)
+            update = get_update2(global_weights, new_w_glob)  # w_t+1 = w_t - a*g_t => g_t = w_t - w_t+1 (a=1)
             update = parameters_dict_to_vector_flt(update)
             if iter > 0:
                 weight_record.append(weight.cpu() - last_weight.cpu())
@@ -370,13 +373,13 @@ if __name__ == '__main__':
             last_weight = weight
             last_update = update
             old_update_list = local_update_list
-            w_glob = new_w_glob
+            global_weights = new_w_glob
         else:
             print("Wrong Defense Method")
             raise NotImplementedError("Wrong Defense Method")
 
         # copy weight to net_glob
-        global_model.load_state_dict(w_glob)
+        global_model.load_state_dict(global_weights)
 
         # print loss
         loss_avg = sum(loss_locals) / len(loss_locals)

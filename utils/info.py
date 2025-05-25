@@ -5,7 +5,7 @@ import math
 def print_exp_details(log,args):
     info = information(args)
     for i in info:
-        log.info(i)
+        log.debug(i)
     write_info(args, info)
     
 def write_info_to_accfile(filename, args):
