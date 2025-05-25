@@ -1,10 +1,11 @@
+import logging
 import time
 import math
 
-def print_exp_details(args):
+def print_exp_details(log,args):
     info = information(args)
     for i in info:
-        print(i)
+        log.info(i)
     write_info(args, info)
     
 def write_info_to_accfile(filename, args):

@@ -7,27 +7,18 @@ sys.path.append('../')
 
 from random import random
 from models.test import test_img
-from models.Nets import ResNet18, vgg19_bn, vgg19, get_model
-from torch.utils.data import DataLoader, Dataset
-from utils.options import args_parser
+from models.Nets import ResNet18, vgg19_bn, get_model
+from torch.utils.data import DataLoader
 
 import torch
-from torchvision import datasets, transforms
 import numpy as np
 import copy
-import matplotlib.pyplot as plt
-from torch import nn, autograd
-import matplotlib
-import os
+from torch import nn
 import random
-import time
-import math
 import heapq
-import argparse
 from models.add_trigger import add_trigger
 from utils.defense import flame_analysis, multi_krum, get_update
 from models.MaliciousUpdate import LocalMaliciousUpdate
-
 
 def benign_train(model, dataset, args):
     train_loader = DataLoader(dataset, batch_size=64, shuffle=True)

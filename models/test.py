@@ -139,8 +139,8 @@ def get_acc_nlp(helper, model, data_source):
                 predicted_sentence = helper.get_sentence(pred.view_as(data)[:, 0])
                 predicted_sentence = f'*PREDICTED*: {predicted_sentence}'
                 score = 100.0 * pred.eq(targets.data).sum() / targets.data.shape[0]
-                logger.info(expected_sentence)
-                logger.info(predicted_sentence)
+                log.info(expected_sentence)
+                log.info(predicted_sentence)
 
                 vis.text(
                     f"<h2>Epoch: {epoch}_{helper.params['current_time']}</h2>"

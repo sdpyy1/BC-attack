@@ -219,7 +219,7 @@ class Helper:
             model = self.target_model
         if self.params['save_model']:
             # save_model
-            logger.info("saving model")
+            log.info("saving model")
             model_name = '{0}/model_last.pt.tar'.format(self.params['folder_path'])
             saved_dict = {
                 'state_dict': model.state_dict(),
@@ -228,7 +228,7 @@ class Helper:
             }
             self.save_checkpoint(saved_dict, False, model_name)
             if epoch in self.params['save_on_epochs']:
-                logger.info(f'Saving model on epoch {epoch}')
+                log.info(f'Saving model on epoch {epoch}')
                 self.save_checkpoint(
                     saved_dict, False, filename=f'{model_name}.epoch_{epoch}'
                 )
@@ -265,10 +265,10 @@ class Helper:
 
             # if len(loglikelihoods) >= sample_size // batch_size:
             #     break
-        logger.info(loglikelihoods[0].shape)
+        log.info(loglikelihoods[0].shape)
         # estimate the fisher information of the parameters.
         loglikelihood = torch.cat(loglikelihoods).mean(0)
-        logger.info(loglikelihood.shape)
+        log.info(loglikelihood.shape)
         loglikelihood_grads = torch.autograd.grad(loglikelihood, model.parameters())
 
         parameter_names = [n.replace('.', '__') for n, p in model.named_parameters()]
