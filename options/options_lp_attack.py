@@ -52,7 +52,7 @@ def args_parser_lp_attack():
 
     # ****0-avg, 1-fltrust 2-tr-mean 3-median 4-krum 5-muli_krum 6-RLR fltrust_bn fltrust_bn_lr****#
     # 防御方案选择
-    parser.add_argument('--defence', type=str, default='flame', help="strategy of defence")
+    parser.add_argument('--defence', type=str, default='krum', help="strategy of defence")
     # krum防御方案的参数
     parser.add_argument('--k', type=int, default=2, help="parameter of krum")
     # parser.add_argument('--iid', action='store_true',

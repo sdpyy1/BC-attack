@@ -25,7 +25,7 @@ import math
 import yaml
 import datetime
 from utils.text_load import *
-
+import wandb
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 matplotlib.use('Agg')
@@ -42,7 +42,7 @@ def write_file(filename, accu_list, back_list, args, analyse=False):
     f.write(str(back_list))
     if args.defence == "krum":
         krum_file = filename + "_krum_dis"
-        torch.save(args.krum_distance, krum_file)
+        torch.save(args.log_distance, krum_file)   # 这里把krum_distance改成了log_distance
     if args.defence == "flare":
         benign_file = filename + "_benign_dis.torch"
         malicious_file = filename + "_malicious_dis.torch"
@@ -86,21 +86,24 @@ def central_dataset_iid(dataset, dataset_size):
 optionChoose = 'lp_attack'
 
 if __name__ == '__main__':
+    # wandb
+
+
 
     # parse args
     if optionChoose == 'lp_attack':
         args = args_parser_lp_attack()
     else:
         raise NotImplementedError
-
-
     if args.attack == 'lp_attack':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
+
     args.device = torch.device('cuda:{}'.format(
         args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
     if not os.path.isdir('./' + args.save):
         os.makedirs('./' + args.save)
     log = utils.logUtils.init_logger(logging.DEBUG,args.save)
+    run = wandb.init(project="BCattack",name=f"{args.attack}-{args.defence}")
 
     log.debug(f"运行设备: {args.device}")
     print_exp_details(log,args)
@@ -240,6 +243,7 @@ if __name__ == '__main__':
         # w_locals存储每个客户端的本地模型参数
         w_locals = [global_weights for i in range(args.num_users)]
     for iter in range(args.epochs):
+        log_dict = {}
         log.info(f"---------------------------------训练开始:{iter}--------------------------------------------")
         loss_locals = []
         if not args.all_clients:
@@ -386,18 +390,18 @@ if __name__ == '__main__':
         log.info('Round {:3d}, Average loss {:.3f}'.format(iter, loss_avg))
         loss_train.append(loss_avg)
 
-        if iter % 1 == 0:
-            acc_test, _, back_acc = test_img(global_model, dataset_test, args, test_backdoor=True)
-            log.info("Main accuracy: {:.2f}".format(acc_test))
-            log.info("Backdoor accuracy: {:.2f}".format(back_acc))
-            if args.model == 'lstm':
-                val_acc_list.append(acc_test)
-            else:
-                val_acc_list.append(acc_test.item())
+        acc_test, _, back_acc = test_img(global_model, dataset_test, args, test_backdoor=True)
+        log.info("Main accuracy: {:.2f}".format(acc_test))
+        log.info("Backdoor accuracy: {:.2f}".format(back_acc))
+        if args.model == 'lstm':
+            val_acc_list.append(acc_test)
+        else:
+            val_acc_list.append(acc_test.item())
 
-            backdoor_acculist.append(back_acc)
-            write_file(filename, val_acc_list, backdoor_acculist, args)
-
+        backdoor_acculist.append(back_acc)
+        write_file(filename, val_acc_list, backdoor_acculist, args)
+        log_dict = ({"epoch":iter, 'avg_loss': loss_avg, 'acc': acc_test, 'BSR': back_acc})
+        wandb.log(log_dict)
         log.info(f"---------------------------------训练结束:{iter}--------------------------------------------")
     best_acc, absr, bbsr = write_file(filename, val_acc_list, backdoor_acculist, args, True)
 
