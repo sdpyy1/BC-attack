@@ -13,7 +13,8 @@ from options.config import read_config
 from utils.info import print_exp_details, write_info_to_accfile, get_base_info
 from options.options import args_parser
 from utils.sampling import mnist_iid, mnist_noniid, cifar_iid, cifar_noniid
-from utils.defense import fltrust, multi_krum, get_update, RLR, flame, get_update2, fld_distance, detection, detection1, parameters_dict_to_vector_flt, lbfgs_torch, layer_krum, flare
+from utils.defense import fltrust, multi_krum, get_update, RLR, flame, get_update2, fld_distance, detection, detection1, \
+    parameters_dict_to_vector_flt, lbfgs_torch, layer_krum, flare, median_aggregation
 from utils.text_helper import TextHelper
 from models.Attacker import attacker
 from torchvision import datasets, transforms
@@ -87,9 +88,9 @@ def central_dataset_iid(dataset, dataset_size):
 attack_method = 'lp_attack'
 
 # ****0-avg, 1-fltrust 2-tr-mean 3-median 4-krum 5-muli_krum 6-RLR 7-flame fltrust_bn fltrust_bn_lr****#
-defence_method = 'flame'
+defence_method = 'medium'
 
-wandb_enable = False
+wandb_enable = True
 
 if __name__ == '__main__':
 
@@ -307,6 +308,7 @@ if __name__ == '__main__':
             loss_locals.append(copy.deepcopy(loss))
 
         # ------------------------------------------------------------------------------------------- Defence -------------------------------------------------------------------------------------------- #
+        log.info(f"开始{args.defence}聚合")
         if args.defence == 'avg':  # no defence
             global_weights = FedAvg(w_locals)
         elif args.defence == 'krum':  # single krum
@@ -338,7 +340,8 @@ if __name__ == '__main__':
             w_glob_update = layer_krum(w_updates, args.k, args, multi_k=True)
             for key, val in global_weights.items():
                 global_weights[key] += w_glob_update[key]
-
+        elif args.defence == 'medium':
+            global_weights = median_aggregation(w_updates, global_weights)
 
         elif args.defence == 'fld':
             # ignore key.split('.')[-1] == 'num_batches_tracked' or key.split('.')[-1] == 'running_mean' or key.split('.')[-1] == 'running_var'

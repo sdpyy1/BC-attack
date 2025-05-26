@@ -20,6 +20,31 @@ def cos(a, b):
     return res
 
 
+def median_aggregation(w_updates, global_weights):
+    """
+    PyTorch中位数聚合防御实现
+    :param w_updates: List[Dict] 客户端参数更新列表
+    :param global_weights: Dict 当前全局模型参数
+    :return: 聚合后的全局参数
+    """
+    aggregated_weights = {}
+    device = next(iter(global_weights.values())).device
+
+    for param_name in global_weights.keys():
+        # 堆叠所有客户端的该参数更新
+        updates = torch.stack([update[param_name].to(device)
+                               for update in w_updates], dim=0)
+
+        # 沿客户端维度计算中位数
+        median_update = torch.median(updates, dim=0).values
+
+        # 保留原始张量类型和设备
+        aggregated_weights[param_name] = global_weights[param_name] + median_update.to(
+            dtype=global_weights[param_name].dtype,
+            device=device
+        )
+
+    return aggregated_weights
 def fltrust(params, central_param, global_parameters, args):
     FLTrustTotalScore = 0
     score_list = []
