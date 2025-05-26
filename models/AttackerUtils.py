@@ -162,7 +162,7 @@ def layer_analysis_no_acc(model_param, args, mal_train_dataset, mal_val_dataset,
 
 def get_attacker_dataset(args, dataset_train=None, dataset_test=None):
     if args.local_dataset==1:
-        print("use local malicious dataset")
+        args.log.debug("use local malicious dataset")
         mal_train_dataset, mal_val_dataset = split_dataset(args.data)
         return mal_train_dataset, mal_val_dataset
     if args.dataset == 'cifar':
@@ -207,6 +207,7 @@ def get_attacker_dataset(args, dataset_train=None, dataset_test=None):
     return mal_train_dataset, mal_val_dataset
 
 
+# 数据集分割，前75%为恶意训练集，25%为恶意验证集
 def split_dataset(dataset):
     num_dataset = len(dataset)
     # random

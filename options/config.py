@@ -26,7 +26,7 @@ def read_config():
     # 不懂？
     parser.add_argument('--ada_mode', type=int, default=1, help='adaptive attack mode')
     # 投毒比例，如果是层级投毒，则设置为1
-    parser.add_argument('--poison_frac', type=float, default=1.0,help="fraction of dataset to corrupt for backdoor attack, 1.0 for layer attack")
+    parser.add_argument('--poison_frac', type=float, default=0.2,help="fraction of dataset to corrupt for backdoor attack, 1.0 for layer attack")
 
     # *****local_ep = 3, local_bs=50, lr=0.1*******
     # 本地客户端内部迭代数

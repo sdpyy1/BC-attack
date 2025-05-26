@@ -87,8 +87,9 @@ def central_dataset_iid(dataset, dataset_size):
 attack_method = 'lp_attack'
 
 # ****0-avg, 1-fltrust 2-tr-mean 3-median 4-krum 5-muli_krum 6-RLR 7-flame fltrust_bn fltrust_bn_lr****#
-defence_method = 'fld'
+defence_method = 'flame'
 
+wandb_enable = False
 
 if __name__ == '__main__':
 
@@ -99,13 +100,15 @@ if __name__ == '__main__':
 
     if args.attack == 'lp_attack':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
+        args.poison_frac = 1.0
     args.device = torch.device('cuda:{}'.format(
         args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
     if not os.path.isdir('./save/' + f"{args.attack}-{args.defence}"):
         os.makedirs('./save/' + f"{args.attack}-{args.defence}")
     log = utils.logUtils.init_logger(logging.DEBUG,'./save/' + f"{args.attack}-{args.defence}")
-    run = wandb.init(project="BCattack",name=f"{args.attack}-{args.defence}")
-
+    if wandb_enable:
+        run = wandb.init(project="BCattack",name=f"{args.attack}-{args.defence}")
+    args.log = log
     log.debug(f"运行设备: {args.device}")
     print_exp_details(log,args)
     # ----------------------------------------------------------------------------------- Load dataset and split users ----------------------------------------------------------------------------------- #
@@ -255,51 +258,50 @@ if __name__ == '__main__':
             w_locals = []
             w_updates = []
         m = max(int(args.frac * args.num_users), 1)  # number of clients in each round
-        client_ids = np.random.choice(range(args.num_users), m, replace=False)  # select the clients for a single round
-        log.info(f"本轮选中的客户端:{client_ids}")
+        selected_clients_ids = np.random.choice(range(args.num_users), m, replace=False)  # select the clients for a single round
+        log.info(f"本轮选中的客户端:{selected_clients_ids}")
         if args.defence == 'fld':
-            client_ids = np.arange(args.num_users)
+            selected_clients_ids = np.arange(args.num_users)
             if iter == 350:  # decrease the lr in the specific round to improve Acc
                 args.lr *= 0.1
 
         if backdoor_begin_acc < val_acc_list[-1]:  # start attack only when Acc overtakes backdoor_begin_acc
             backdoor_begin_acc = 0
-            attack_number = int(args.malicious * m)  # number of malicious clients in a single round
+            attack_client_num = int(args.malicious * m)  # number of malicious clients in a single round
         else:
-            attack_number = 0
+            attack_client_num = 0
         if args.scaling_attack_round != 1:
             # scaling attack begin 100-th round and perform each args.attack_round round
             if iter > 100 and iter%args.scaling_attack_round == 0:
-                attack_number = attack_number
+                attack_client_num = attack_client_num
             else:
-                attack_number = 0
-        log.info(f"恶意客户端数量:{attack_number}")
+                attack_client_num = 0
+        log.info(f"恶意客户端数量:{attack_client_num}")
         mal_weight=[]
         mal_loss=[]
-        for num_turn, idx in enumerate(client_ids):
-            if attack_number > 0:
+        for num_turn, selected_client_id in enumerate(selected_clients_ids):
+            if attack_client_num > 0:
                 # upload models for malicious clients
-                log.info(f"恶意客户端:{idx}开始攻击")
                 args.iter = iter
                 if args.defence == 'fld':
-                    args.old_update_list = old_update_list[0:int(args.malicious * m)]
-                    m_idx = idx
+                    args.old_update_list = old_update_list[0:int(args.malicious * m)] # ?
+                    m_idx = selected_client_id # ?
                 else:
                     m_idx = None
-                mal_weight, loss, args.attack_layers = attacker(malicious_list, attack_number, args.attack, dataset_train, dataset_test, dict_users, global_model, args, idx = m_idx)
-                attack_number -= 1
+                mal_weight, loss, args.attack_layers = attacker(malicious_list, attack_client_num, args.attack, dataset_train, dataset_test, dict_users, global_model, args, idx = m_idx)
+                attack_client_num -= 1
                 w = mal_weight[0]
             else:
                 # upload models for benign clients
-                log.info(f"良性客户端:{idx}训练")
-                local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx])
+                log.info(f"良性客户端:{selected_client_id}训练")
+                local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[selected_client_id])
                 w, loss = local.train(net=copy.deepcopy(global_model).to(args.device))
             if args.defence == 'fld':
                 w_updates.append(get_update2(w, global_weights)) # ignore num_batches_tracked, running_mean, running_var
             else:
                 w_updates.append(get_update(w, global_weights))
             if args.all_clients:
-                w_locals[idx] = copy.deepcopy(w)
+                w_locals[selected_client_id] = copy.deepcopy(w)
             else:
                 w_locals.append(copy.deepcopy(w))
             loss_locals.append(copy.deepcopy(loss))
@@ -351,8 +353,8 @@ if __name__ == '__main__':
                 args.hvp = lbfgs_torch(args, weight_record, update_record, weight - last_weight)
                 hvp = args.hvp
 
-                attack_number = int(args.malicious * m)
-                distance = fld_distance(old_update_list, local_update_list, global_model, attack_number, hvp)
+                attack_client_num = int(args.malicious * m)
+                distance = fld_distance(old_update_list, local_update_list, global_model, attack_client_num, hvp)
                 distance = distance.view(1,-1)
                 malicious_score = torch.cat((malicious_score, distance), dim=0)
                 if malicious_score.shape[0] > N+1:
@@ -385,7 +387,6 @@ if __name__ == '__main__':
             old_update_list = local_update_list
             global_weights = new_w_glob
         else:
-            print("Wrong Defense Method")
             raise NotImplementedError("Wrong Defense Method")
         # ------------------------------------------------------------------------------------------- Defence -------------------------------------------------------------------------------------------- #
 
@@ -409,8 +410,9 @@ if __name__ == '__main__':
 
         backdoor_acculist.append(back_acc)
         write_file(filename, val_acc_list, backdoor_acculist, args)
-        log_dict = ({"epoch":iter, 'avg_loss': loss_avg, 'acc': acc_test, 'BSR': back_acc})
-        wandb.log(log_dict)
+        if wandb_enable:
+            log_dict = ({"epoch":iter, 'avg_loss': loss_avg, 'acc': acc_test, 'BSR': back_acc})
+            wandb.log(log_dict)
         log.info(f"---------------------------------训练结束:{iter}--------------------------------------------")
         # ------------------------------------------------------------------------------------------- INFO ----------------------------------------------------------------------------------------------- #
 

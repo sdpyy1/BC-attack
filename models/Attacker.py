@@ -420,12 +420,14 @@ def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test,
         temp_attack_layers = args.attack_layers
     if idx == None:
         idx = random.choice(list_mal_client)
+        args.log.info(f"随机选择攻击者[{idx}]")
     w, loss, args.attack_layers = None, None, None
     # craft attack model once
     if attack_type == "dba":
-        num_dba_attacker = int(args.num_users * args.malicious)
-        dba_group = int(num_dba_attacker / 4)
+        num_dba_attacker = int(args.num_users * args.malicious)  # 总共的攻击者数量
+        dba_group = int(num_dba_attacker / 4)  # 每四个攻击者分一组
         idx = args.dba_sign % (4 * dba_group)
+        args.log.debug(f"idx:{idx},args.dba_sign:{args.dba_sign}")
         args.dba_sign += 1
     local = LocalMaliciousUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx], order=idx, dataset_test=dataset_test)
     if attack_type == "layerattack_ER_his" or attack_type == "LFA" or attack_type == "LPA":
@@ -437,7 +439,7 @@ def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test,
     else:
         w, loss = local.train(
             net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
-    print("client", idx, "--attack--")
+
     if attack_type == "adaptive" or attack_type == "adaptive_local":
         num_benign_simulate = min(int(args.num_users * args.malicious), int(args.frac * args.num_users))
         

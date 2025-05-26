@@ -85,12 +85,11 @@ class LocalMaliciousUpdate(object):
         #  attack_goal == -1 means attack all label to attack_label
         if self.attack_goal == -1:
             if math.isclose(self.poison_frac, 1):  # 100% copy poison data
-                bad_data, bad_label = copy.deepcopy(
-                        images), copy.deepcopy(labels)
+                bad_data, bad_label = copy.deepcopy(images), copy.deepcopy(labels)
                 for xx in range(len(bad_data)):
-                    bad_label[xx] = self.attack_label
+                    bad_label[xx] = self.attack_label   # 替换标签为目标标签
                     # bad_data[xx][:, 0:5, 0:5] = torch.max(images[xx])
-                    bad_data[xx] = self.add_trigger(bad_data[xx])
+                    bad_data[xx] = self.add_trigger(bad_data[xx])   # 图片在这里添加了触发器
                 images = torch.cat((images, bad_data), dim=0)
                 labels = torch.cat((labels, bad_label))
             else:
@@ -511,18 +510,15 @@ class LocalMaliciousUpdate(object):
         global_param = copy.deepcopy(net.state_dict())
         badnet = copy.deepcopy(net)
         badnet.train()
-        # train and update
-        optimizer = torch.optim.SGD(
-            badnet.parameters(), lr=self.args.lr, momentum=self.args.momentum)
+        # 投毒数据训练出恶意模型
+        optimizer = torch.optim.SGD(badnet.parameters(), lr=self.args.lr, momentum=self.args.momentum)
         epoch_loss = []
         for iter in range(self.args.local_ep):
             batch_loss = []
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
-                bad_data, bad_label = copy.deepcopy(
-                    images), copy.deepcopy(labels)
+                bad_data, bad_label = copy.deepcopy(images), copy.deepcopy(labels)
                 images, labels = self.trigger_data(bad_data, bad_label)
-                images, labels = images.to(
-                    self.args.device), labels.to(self.args.device)
+                images, labels = images.to(self.args.device), labels.to(self.args.device)
                 badnet.zero_grad()
                 log_probs = badnet(images)
                 loss = self.loss_func(log_probs, labels)
@@ -531,17 +527,16 @@ class LocalMaliciousUpdate(object):
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
         bad_net_param = badnet.state_dict()
-        self.malicious_model = copy.deepcopy(badnet)
+        self.malicious_model = copy.deepcopy(badnet)   # 到这里使用投毒的数据训练了恶意模型
 
+        # 正常数据，训练出良性模型
         net.train()
-        optimizer = torch.optim.SGD(
-            net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
+        optimizer = torch.optim.SGD(net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
         epoch_loss = []
         for iter in range(self.args.local_ep):
             batch_loss = []
             for batch_idx, (images, labels) in enumerate(self.ldr_train):
-                images, labels = images.to(
-                    self.args.device), labels.to(self.args.device)
+                images, labels = images.to(self.args.device), labels.to(self.args.device)
                 net.zero_grad()
                 log_probs = net(images)
                 loss = self.loss_func(log_probs, labels)
@@ -549,6 +544,8 @@ class LocalMaliciousUpdate(object):
                 optimizer.step()
                 batch_loss.append(loss.item())
             epoch_loss.append(sum(batch_loss) / len(batch_loss))
+
+
         malicious_info = get_malicious_info(global_param, self.args, dataset_train=self.dataset_train, dataset_test=self.dataset_test)
         malicious_info['local_malicious_model'] = bad_net_param
         malicious_info['local_benign_model'] = net.state_dict()
