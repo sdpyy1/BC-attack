@@ -6,7 +6,7 @@ def print_exp_details(log,args):
     info = information(args)
     for i in info:
         log.debug(i)
-    write_info(args, info)
+    # write_info(args, info)   # 不需要单独写配置的文件
     
 def write_info_to_accfile(filename, args):
     info = information(args)
@@ -16,12 +16,12 @@ def write_info_to_accfile(filename, args):
         f.write('\n')
     f.close()    
     
-def write_info(args, info):
-    f = open("./"+args.save+'/'+"a_info.txt", "w")
-    for i in info:
-        f.write(i)
-        f.write('\n')
-    f.close()
+# def write_info(args, info):
+#     f = open("./"+args.save+'/'+"a_info.txt", "w")
+#     for i in info:
+#         f.write(i)
+#         f.write('\n')
+#     f.close()
     
 def information(args):
     info = []

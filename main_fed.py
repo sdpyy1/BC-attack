@@ -9,7 +9,7 @@ from models.Fed import FedAvg
 from models.Nets import ResNet18, vgg19_bn, get_model, vgg11
 from models.resnet20 import resnet20
 from models.Update import LocalUpdate
-from options.options_lp_attack import args_parser_lp_attack
+from options.config import read_config
 from utils.info import print_exp_details, write_info_to_accfile, get_base_info
 from options.options import args_parser
 from utils.sampling import mnist_iid, mnist_noniid, cifar_iid, cifar_noniid
@@ -83,31 +83,35 @@ def central_dataset_iid(dataset, dataset_size):
     return central_dataset
 
 # lp_attack
-optionChoose = 'lp_attack'
+# ***** badnet labelflip layerattack updateflip get_weight  adaptive****
+attack_method = 'lp_attack'
+
+# ****0-avg, 1-fltrust 2-tr-mean 3-median 4-krum 5-muli_krum 6-RLR 7-flame fltrust_bn fltrust_bn_lr****#
+defence_method = 'fld'
+
 
 if __name__ == '__main__':
-    # wandb
-
-
 
     # parse args
-    if optionChoose == 'lp_attack':
-        args = args_parser_lp_attack()
-    else:
-        raise NotImplementedError
+    args = read_config()
+    args.attack = attack_method
+    args.defence = defence_method
+
     if args.attack == 'lp_attack':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
-
     args.device = torch.device('cuda:{}'.format(
         args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
-    if not os.path.isdir('./' + args.save):
-        os.makedirs('./' + args.save)
-    log = utils.logUtils.init_logger(logging.DEBUG,args.save)
+    if not os.path.isdir('./save/' + f"{args.attack}-{args.defence}"):
+        os.makedirs('./save/' + f"{args.attack}-{args.defence}")
+    log = utils.logUtils.init_logger(logging.DEBUG,'./save/' + f"{args.attack}-{args.defence}")
     run = wandb.init(project="BCattack",name=f"{args.attack}-{args.defence}")
 
     log.debug(f"运行设备: {args.device}")
     print_exp_details(log,args)
     # ----------------------------------------------------------------------------------- Load dataset and split users ----------------------------------------------------------------------------------- #
+    log.debug(f"数据集: {args.dataset}")
+    log.debug(f"独立同分布: {args.iid}")
+    log.debug(f"开始加载数据集:{args.dataset}")
     if args.dataset == 'mnist':
         trans_mnist = transforms.Compose(
             [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
@@ -143,7 +147,7 @@ if __name__ == '__main__':
         else:
             # dict_users = np.load('./data/non_iid_cifar.npy', allow_pickle=True).item()
             dict_users = cifar_noniid([x[1] for x in dataset_train], args.num_users, 10, args.p)
-            print('main_fed.py line 137 len(dict_users):', len(dict_users))
+            log.debug('main_fed.py line 137 len(dict_users):', len(dict_users))
     elif args.dataset == 'reddit':
         with open(f'./utils/words.yaml', 'r') as f:
             params_loaded = yaml.safe_load(f)
@@ -159,8 +163,9 @@ if __name__ == '__main__':
         dataset_test = helper.test_data
         args.helper = helper
     else:
-        exit('Error: unrecognized dataset')
-    img_size = dataset_train[0][0].shape
+        raise NotImplementedError("Error: unrecognized dataset")
+    log.debug(f"训练集加载成功,数据集大小: {len(dataset_train)}")
+    # img_size = dataset_train[0][0].shape
     # dict_users {
     #     0: {1, 3, 5, ...},  # 客户端0的数据索引
     #     1: {2, 4, 6, ...},  # 客户端1的数据索引
@@ -172,7 +177,7 @@ if __name__ == '__main__':
 
 
     # ------------------------------------------------------------------------------------------- Load model -------------------------------------------------------------------------------------------- #
-    log.debug(f"模型选择: {args.model}")
+    log.debug(f"全局模型: {args.model}")
     if args.model == 'VGG' and args.dataset == 'cifar':
         global_model = vgg19_bn().to(args.device)
     elif args.model == 'VGG11' and args.dataset == 'cifar':
@@ -221,7 +226,7 @@ if __name__ == '__main__':
     if args.init != 'None':  # continue from checkpoint
         param = torch.load(args.init)
         global_model.load_state_dict(param)
-        log.info(f"读取模型来自{param}")
+        log.debug(f"读取模型来自{param}")
 
     val_acc_list = [0.0001]  # Acc list
     backdoor_acculist = [0]  # BSR list
@@ -236,10 +241,10 @@ if __name__ == '__main__':
     malicious_list = []  # list of the index of malicious clients
     for i in range(int(args.num_users * args.malicious)):
         malicious_list.append(i)
-    log.info(f"恶意客户端设置为:{malicious_list}")
+    log.debug(f"恶意客户端设置为:{malicious_list}")
 
     if args.all_clients:
-        log.info("Aggregation over all clients")
+        log.debug("所有客户端都参与聚合")
         # w_locals存储每个客户端的本地模型参数
         w_locals = [global_weights for i in range(args.num_users)]
     for iter in range(args.epochs):
@@ -250,10 +255,10 @@ if __name__ == '__main__':
             w_locals = []
             w_updates = []
         m = max(int(args.frac * args.num_users), 1)  # number of clients in each round
-        idxs_users = np.random.choice(range(args.num_users), m, replace=False)  # select the clients for a single round
-        log.debug(f"本轮选中的客户端:{idxs_users}")
+        client_ids = np.random.choice(range(args.num_users), m, replace=False)  # select the clients for a single round
+        log.info(f"本轮选中的客户端:{client_ids}")
         if args.defence == 'fld':
-            idxs_users = np.arange(args.num_users)
+            client_ids = np.arange(args.num_users)
             if iter == 350:  # decrease the lr in the specific round to improve Acc
                 args.lr *= 0.1
 
@@ -271,7 +276,7 @@ if __name__ == '__main__':
         log.info(f"恶意客户端数量:{attack_number}")
         mal_weight=[]
         mal_loss=[]
-        for num_turn, idx in enumerate(idxs_users):
+        for num_turn, idx in enumerate(client_ids):
             if attack_number > 0:
                 # upload models for malicious clients
                 log.info(f"恶意客户端:{idx}开始攻击")
@@ -299,6 +304,7 @@ if __name__ == '__main__':
                 w_locals.append(copy.deepcopy(w))
             loss_locals.append(copy.deepcopy(loss))
 
+        # ------------------------------------------------------------------------------------------- Defence -------------------------------------------------------------------------------------------- #
         if args.defence == 'avg':  # no defence
             global_weights = FedAvg(w_locals)
         elif args.defence == 'krum':  # single krum
@@ -381,6 +387,9 @@ if __name__ == '__main__':
         else:
             print("Wrong Defense Method")
             raise NotImplementedError("Wrong Defense Method")
+        # ------------------------------------------------------------------------------------------- Defence -------------------------------------------------------------------------------------------- #
+
+        # ------------------------------------------------------------------------------------------- INFO ----------------------------------------------------------------------------------------------- #
 
         # copy weight to net_glob
         global_model.load_state_dict(global_weights)
@@ -403,6 +412,8 @@ if __name__ == '__main__':
         log_dict = ({"epoch":iter, 'avg_loss': loss_avg, 'acc': acc_test, 'BSR': back_acc})
         wandb.log(log_dict)
         log.info(f"---------------------------------训练结束:{iter}--------------------------------------------")
+        # ------------------------------------------------------------------------------------------- INFO ----------------------------------------------------------------------------------------------- #
+
     best_acc, absr, bbsr = write_file(filename, val_acc_list, backdoor_acculist, args, True)
 
     # plot loss curve

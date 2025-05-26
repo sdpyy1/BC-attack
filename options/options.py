@@ -8,7 +8,7 @@ import argparse
 def args_parser():
     parser = argparse.ArgumentParser()
     # 保存位置
-    parser.add_argument('--save', type=str, default='save', help="dic to save results (ending without /)")
+    parser.add_argument('--save', type=str, default='save', help="dic to save results (ending without /)")   # 失效！
     # 读取保存模型（无初始值）
     parser.add_argument('--init', type=str, default='None', help="location of init model")
     # 总迭代数

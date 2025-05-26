@@ -5,7 +5,7 @@
 import argparse
 
 
-def args_parser_lp_attack():
+def read_config():
     parser = argparse.ArgumentParser()
     # 保存位置
     parser.add_argument('--save', type=str, default='save/lp_attack', help="dic to save results (ending without /)")
