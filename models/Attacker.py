@@ -415,39 +415,38 @@ def lambda_adaptive(key_arr, value_arr, model_benign, model_malicious, benign_mo
 
 
 def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test, dict_users, net_glob, args, idx=None):
-    num_mal_temp=0
-    if args.ada_mode == 20:
-        temp_attack_layers = args.attack_layers
+
     if idx == None:
         idx = random.choice(list_mal_client)
         args.log.info(f"随机选择攻击者[{idx}]")
+
     w, loss, args.attack_layers = None, None, None
     # craft attack model once
+    # dba前处理
     if attack_type == "dba":
         num_dba_attacker = int(args.num_users * args.malicious)  # 总共的攻击者数量
         dba_group = int(num_dba_attacker / 4)  # 每四个攻击者分一组
         idx = args.dba_sign % (4 * dba_group)
         args.log.debug(f"idx:{idx},args.dba_sign:{args.dba_sign}")
         args.dba_sign += 1
-    local = LocalMaliciousUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx], order=idx, dataset_test=dataset_test)
-    if attack_type == "layerattack_ER_his" or attack_type == "LFA" or attack_type == "LPA":
-        w, loss, args.attack_layers = local.train(
-            net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
-    elif attack_type == "adaptive" or attack_type == "adaptive_local":
-        loss, malicious_info = local.train(
-            net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
-    else:
-        w, loss = local.train(
-            net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
 
-    if attack_type == "adaptive" or attack_type == "adaptive_local":
+    # 为攻击者加载数据
+    local = LocalMaliciousUpdate(args=args, dataset=dataset_train, idxs=dict_users[idx], order=idx, dataset_test=dataset_test)
+
+
+    # 分类不同攻击返回不同
+    if attack_type == "layerattack_ER_his" or attack_type == "LFA" or attack_type == "LPA":
+        w, loss, args.attack_layers = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
+    elif attack_type == "adaptive" or attack_type == "adaptive_local":
+        if args.ada_mode == 20:
+            temp_attack_layers = args.attack_layers
+        loss, malicious_info = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
+        num_mal_temp = 0
         num_benign_simulate = min(int(args.num_users * args.malicious), int(args.frac * args.num_users))
-        
         if num_benign_simulate != int(args.frac * args.num_users):
             # decrease number of clients in simulation because number of malicious client are limited
             num_mal_temp = num_mal
             num_mal = int(args.num_users * args.malicious * args.malicious)
-
         num_benign_simulate -= num_mal
         benign_model_list = []
         for idx in range(num_benign_simulate):
@@ -457,15 +456,21 @@ def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test,
                 net=copy.deepcopy(net_glob).to(args.device))
             benign_model_list.append(copy.deepcopy(benign_w))
         if args.ada_mode == 20:
-            args.attack_layers = temp_attack_layers 
-            w, args.attack_layers = adaptive_attack(benign_model_list, malicious_info, net_glob, args, args.ada_mode, num_mal)
+            args.attack_layers = temp_attack_layers
+            w, args.attack_layers = adaptive_attack(benign_model_list, malicious_info, net_glob, args, args.ada_mode,
+                                                    num_mal)
         else:
             w = adaptive_attack(benign_model_list, malicious_info, net_glob, args, args.ada_mode, num_mal)
-    if num_mal_temp>0:
-        temp_w = [w for i in range(num_mal_temp)]
-        w = temp_w
-    elif num_mal > 0:
-        temp_w = [w for i in range(num_mal)]
-        w = temp_w
-    
+
+        # 下面的代码tab了一下，因为参数只有在adaptive_attack中被修改
+        if num_mal_temp > 0:
+            temp_w = [w for i in range(num_mal_temp)]
+            w = temp_w
+        elif num_mal > 0:
+            temp_w = [w for i in range(num_mal)]
+            w = temp_w
+    else:
+        w, loss = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
+
+
     return w, loss, args.attack_layers
