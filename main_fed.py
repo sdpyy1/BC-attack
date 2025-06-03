@@ -31,8 +31,6 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 matplotlib.use('Agg')
 
-
-
 def write_file(filename, accu_list, back_list, args, analyse=False):
     write_info_to_accfile(filename, args)
     f = open(filename, "a")
@@ -83,35 +81,60 @@ def central_dataset_iid(dataset, dataset_size):
         all_idxs, dataset_size, replace=False))
     return central_dataset
 
-# lp_attack
-# ***** badnet labelflip layerattack updateflip get_weight  adaptive****
-attack_method = 'lp_attack'
 
-# ****0-avg, 1-fltrust 2-tr-mean 3-median 4-krum 5-muli_krum 6-RLR 7-flame fltrust_bn fltrust_bn_lr****#
-defence_method = 'medium'
-
-wandb_enable = True
+def set_seed(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 
 if __name__ == '__main__':
-
+    # 是否启用wandb
+    wandb_enable = True
+    set_seed(0)
     # parse args
     args = read_config()
-    args.attack = attack_method
-    args.defence = defence_method
+
+
+    # badnet/lp_attack/opt
+    args.attack = 'lp_attack'
+    # avg/medium/krum/muli_krum/RLR/flame
+    args.defence = 'fltrust'
+    # opt/square
+    args.trigger = 'opt'
+
+    args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
 
     if args.attack == 'lp_attack':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
         args.poison_frac = 1.0
-    args.device = torch.device('cuda:{}'.format(
-        args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
-    if not os.path.isdir('./save/' + f"{args.attack}-{args.defence}"):
-        os.makedirs('./save/' + f"{args.attack}-{args.defence}")
-    log = utils.logUtils.init_logger(logging.DEBUG,'./save/' + f"{args.attack}-{args.defence}")
+
+    args.save = './save/' + f"{args.attack}-{args.defence}-{args.trigger}"
+    # 保存路径创建
+    if not os.path.isdir(args.save):
+        os.makedirs(args.save)
+    # 日志系统启动
+    log = utils.logUtils.init_logger(logging.ERROR,args.save)
     if wandb_enable:
-        run = wandb.init(project="BCattack",name=f"{args.attack}-{args.defence}")
+        run = wandb.init(project="BCattack",name=args.save.replace("./save/",""))
     args.log = log
+
+    # 初始化自适应触发器
+    if args.trigger == 'opt':
+        trigger_size = 5
+        args.optTrigger = torch.ones((1,3, 32, 32), requires_grad=False, device='cuda') * 0.5
+        args.mask = torch.zeros_like(args.optTrigger)
+        args.mask[:, :, args.triggerX:args.triggerX + trigger_size,
+        args.triggerY:args.triggerY + trigger_size] = 1
+        args.mask = args.mask.to('cuda')
+
     log.debug(f"运行设备: {args.device}")
     print_exp_details(log,args)
+
+
     # ----------------------------------------------------------------------------------- Load dataset and split users ----------------------------------------------------------------------------------- #
     log.debug(f"数据集: {args.dataset}")
     log.debug(f"独立同分布: {args.iid}")
@@ -225,7 +248,7 @@ if __name__ == '__main__':
     log.debug(f"模型acc达到后{backdoor_begin_acc}开始投毒")
     central_dataset = central_dataset_iid(dataset_test, args.server_dataset)  # get root dataset for FLTrust
     base_info = get_base_info(args)
-    filename = './' + args.save + '/accuracy_file_{}.txt'.format( base_info)  # log hyperparameters
+    filename =args.save+ '/accuracy_file_{}.txt'.format( base_info)  # log hyperparameters
     log.debug(f"文件最终保存位置:{filename}")
     if args.init != 'None':  # continue from checkpoint
         param = torch.load(args.init)
@@ -250,7 +273,7 @@ if __name__ == '__main__':
     if args.all_clients:
         log.debug("所有客户端都参与聚合")
         # w_locals存储每个客户端的本地模型参数
-        w_locals = [global_weights for i in range(args.num_users)]
+        w_locals = [global_weights for i in range(args.num_users)]     # [{},{},{}] 每个客户一个字典
     for iter in range(args.epochs):
         log_dict = {}
         log.info(f"---------------------------------训练开始:{iter}--------------------------------------------")
@@ -294,9 +317,9 @@ if __name__ == '__main__':
                 w = mal_weight[0]
             else:
                 # upload models for benign clients
-                log.info(f"良性客户端:{selected_client_id}训练")
                 local = LocalUpdate(args=args, dataset=dataset_train, idxs=dict_users[selected_client_id])
                 w, loss = local.train(net=copy.deepcopy(global_model).to(args.device))
+                log.info(f"良性客户端:{selected_client_id}训练")
             if args.defence == 'fld':
                 w_updates.append(get_update2(w, global_weights)) # ignore num_batches_tracked, running_mean, running_var
             else:

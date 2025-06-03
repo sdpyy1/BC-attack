@@ -56,7 +56,6 @@ class LocalMaliciousUpdate(object):
             self.attack = args.attack
         else:
             self.attack = attack
-
         self.trigger = args.trigger
         self.triggerX = args.triggerX
         self.triggerY = args.triggerY
@@ -75,12 +74,74 @@ class LocalMaliciousUpdate(object):
             self.dataset_train = dataset
         if dataset_test is not None:
             self.dataset_test = dataset_test
-            
+
     def add_trigger(self, image):
         return add_trigger(self.args, image)
 
-    
-            
+    def val_asr(self, model , t, m):
+        ce_loss = torch.nn.CrossEntropyLoss(label_smoothing=0.001)
+        # 预测正确的
+        correct = 0.
+        # 总数据量
+        num_data = 0.
+        total_loss = 0.
+        with torch.no_grad():
+            for inputs, labels in self.ldr_train:
+                inputs, labels = inputs.cuda(), labels.cuda()
+                # 嵌入触发器
+                inputs = t * m + (1 - m) * inputs
+                # 投毒后的标签都是2
+                labels[:] = self.args.attack_label
+                # 获得模型的预测结果
+                output = model(inputs)
+                loss = ce_loss(output, labels)
+                total_loss += loss
+                pred = output.data.max(1)[1]
+                correct += pred.eq(labels.data.view_as(pred)).cpu().sum().item()
+                num_data += output.size(0)
+        asr = correct / num_data
+        return asr, total_loss
+
+    def opt_trigger(self, model):
+        model.eval()
+        ce_loss = torch.nn.CrossEntropyLoss()
+        alpha = 0.3
+        K = 200
+        t = self.args.optTrigger.clone()
+        m = self.args.mask.clone()
+        normal_grad = 0.
+        count = 0
+        trigger_optim = torch.optim.Adam([t], lr=alpha * 10, weight_decay=0)
+        for i in range(K):
+            if i % 10 == 0:
+                asr, loss = self.val_asr(model, t, m)
+                self.args.log.debug(f"local BSR -> asr:[{asr:.3f}],loss:[{loss:.3f}]")
+            # 投毒所有图片计算loss
+            for inputs, labels in self.ldr_train:
+                count += 1
+                t.requires_grad_()
+                inputs, labels = inputs.cuda(), labels.cuda()
+                # 投毒数据
+                inputs = t * m + (1 - m) * inputs
+                # 修改恶意标签
+                labels[:] = self.args.attack_label
+                outputs = model(inputs)
+                loss = ce_loss(outputs, labels)
+                # 根据loss来更新触发器
+                if loss != None:
+                    loss.backward()
+                    normal_grad += t.grad.sum()
+                    new_t = t - alpha * t.grad.sign()
+                    t = new_t.detach_()
+                    t = torch.clamp(t, min=-2, max=2)
+                    t.requires_grad_()
+        t = t.detach()
+        self.args.optTrigger = t
+        # 只修改了触发器，但是触发器位置并没有修改
+        self.args.mask = m
+        return True
+
+
     def trigger_data(self, images, labels):
         #  attack_goal == -1 means attack all label to attack_label
         if self.attack_goal == -1:
@@ -152,6 +213,9 @@ class LocalMaliciousUpdate(object):
             return self.distance_awareness_attack2(net)
         elif self.attack == 'scaling':
             return self.train_scaling_attack(net)
+
+        elif self.attack == 'opt':
+            return self.train_malicious_opt(net)
         else:
             print("Error Attack Method")
             os._exit(0)
@@ -507,6 +571,10 @@ class LocalMaliciousUpdate(object):
         return attack_param, sum(epoch_loss) / len(epoch_loss), attack_list
 
     def train_malicious_adaptive(self, net):
+        if self.args.trigger == 'opt':
+            self.args.log.debug("开始自适应调整后门触发器")
+            self.opt_trigger(net)
+            self.args.log.debug("后门触发器调整结束")
         global_param = copy.deepcopy(net.state_dict())
         badnet = copy.deepcopy(net)
         badnet.train()
@@ -547,6 +615,7 @@ class LocalMaliciousUpdate(object):
 
 
         malicious_info = get_malicious_info(global_param, self.args, dataset_train=self.dataset_train, dataset_test=self.dataset_test)
+
         malicious_info['local_malicious_model'] = bad_net_param
         malicious_info['local_benign_model'] = net.state_dict()
         '''
@@ -618,7 +687,34 @@ class LocalMaliciousUpdate(object):
         }
         '''
         return sum(epoch_loss) / len(epoch_loss), malicious_info
-
+    def train_malicious_opt(self, net, test_img=None, dataset_test=None, args=None):
+        self.args.log.debug("开始自适应调整后门触发器")
+        self.opt_trigger(net)
+        self.args.log.debug("后门触发器调整结束")
+        net.train()
+        # train and update
+        optimizer = torch.optim.SGD(
+            net.parameters(), lr=self.args.lr, momentum=self.args.momentum)
+        epoch_loss = []
+        for iter in range(self.args.local_ep):
+            batch_loss = []
+            for batch_idx, (images, labels) in enumerate(self.ldr_train):
+                images, labels = self.trigger_data(images, labels)
+                images, labels = images.to(
+                    self.args.device), labels.to(self.args.device)
+                net.zero_grad()
+                log_probs = net(images)
+                loss = self.loss_func(log_probs, labels)
+                loss.backward()
+                optimizer.step()
+                batch_loss.append(loss.item())
+            epoch_loss.append(sum(batch_loss) / len(batch_loss))
+        if test_img is not None:
+            acc_test, _, backdoor_acc = test_img(
+                net, dataset_test, args, test_backdoor=True)
+            print("local Testing accuracy: {:.2f}".format(acc_test))
+            print("local Backdoor accuracy: {:.2f}".format(backdoor_acc))
+        return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
     def train_malicious_badnet(self, net, test_img=None, dataset_test=None, args=None):
         net.train()
         # train and update
@@ -693,7 +789,7 @@ class LocalMaliciousUpdate(object):
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
     
     def save_img(self, image):
-        img = image
+        img = image.cpu()
         if image.shape[0] == 1:
             pixel_min = torch.min(img)
             img -= pixel_min
@@ -701,7 +797,7 @@ class LocalMaliciousUpdate(object):
             img /= pixel_max
             io.imsave('./save/backdoor_trigger.png', img_as_ubyte(img.squeeze().numpy()))
         else:
-            img = image.numpy()
+            img = image.cpu().numpy()
             img = img.transpose(1, 2, 0)
             pixel_min = np.min(img)
             img -= pixel_min
@@ -710,3 +806,4 @@ class LocalMaliciousUpdate(object):
             if self.attack == 'dba':
                 io.imsave('./save/dba'+str(self.args.dba_class)+'_trigger.png', img_as_ubyte(img))
             io.imsave('./save/backdoor_trigger.png', img_as_ubyte(img))
+

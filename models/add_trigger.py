@@ -18,7 +18,7 @@ def add_trigger(args, image, test=False):
         elif args.dba_class == 3:
             # image[:, args.triggerY + 2+gap:args.triggerY + 2+gap+2, args.triggerX +size+gap:args.triggerX +size+gap+size] = pixel_max
             image[:, args.triggerY + 2:args.triggerY + 5, args.triggerX + 2:args.triggerX + 5] = pixel_max
-        args.save_img(image)
+        # args.save_img(image)
         return image
     if args.attack == 'dba' and test == True:
         image[:, args.triggerY + 0:args.triggerY + 2, args.triggerX + 0:args.triggerX + 2] = pixel_max
@@ -27,12 +27,13 @@ def add_trigger(args, image, test=False):
         image[:, args.triggerY + 2:args.triggerY + 5, args.triggerX + 2:args.triggerX + 5] = pixel_max
 
         return image
+
     if args.trigger == 'square':
         pixel_max = torch.max(image) if torch.max(image) > 1 else 1
-
         if args.dataset == 'cifar':
             pixel_max = 1
         image[:, args.triggerY:args.triggerY + 5, args.triggerX:args.triggerX + 5] = pixel_max
+
     elif args.trigger == 'pattern':
         pixel_max = torch.max(image) if torch.max(image) > 1 else 1
         image[:, args.triggerY + 0, args.triggerX + 0] = pixel_max
@@ -79,4 +80,11 @@ def add_trigger(args, image, test=False):
         image[image > max_pixel] = max_pixel
     # save the most recent backdoor image in test dataset
     # args.save_img(image)
+    elif args.trigger == 'opt':
+        trigger = args.optTrigger.to(image.device)
+        mask = args.mask.to(image.device)
+        image = trigger*mask + image*(1-mask)
+
+
+    args.save_img(image)
     return image

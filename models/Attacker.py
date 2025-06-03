@@ -215,7 +215,6 @@ def adaptive_attack_analysis_krum(benign_update_list, malicious_update, k, args)
         selected_client = multi_krum(malicious_update, k, args)
     elif args.defence == 'multikrum' or args.defence != 'multikrum':
         selected_client = multi_krum(malicious_update, k, args, multi_k=True)
-    print(selected_client)
     if log_dis == True:
         args.log_distance = True
     if min(selected_client) < malicious_num:
@@ -415,8 +414,8 @@ def lambda_adaptive(key_arr, value_arr, model_benign, model_malicious, benign_mo
 
 
 def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test, dict_users, net_glob, args, idx=None):
-
-    if idx == None:
+    num_mal_temp = 0
+    if idx is None:
         idx = random.choice(list_mal_client)
         args.log.info(f"随机选择攻击者[{idx}]")
 
@@ -437,11 +436,13 @@ def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test,
     # 分类不同攻击返回不同
     if attack_type == "layerattack_ER_his" or attack_type == "LFA" or attack_type == "LPA":
         w, loss, args.attack_layers = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
+
     elif attack_type == "adaptive" or attack_type == "adaptive_local":
         if args.ada_mode == 20:
             temp_attack_layers = args.attack_layers
+
         loss, malicious_info = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
-        num_mal_temp = 0
+
         num_benign_simulate = min(int(args.num_users * args.malicious), int(args.frac * args.num_users))
         if num_benign_simulate != int(args.frac * args.num_users):
             # decrease number of clients in simulation because number of malicious client are limited
@@ -462,15 +463,17 @@ def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test,
         else:
             w = adaptive_attack(benign_model_list, malicious_info, net_glob, args, args.ada_mode, num_mal)
 
-        # 下面的代码tab了一下，因为参数只有在adaptive_attack中被修改
-        if num_mal_temp > 0:
-            temp_w = [w for i in range(num_mal_temp)]
-            w = temp_w
-        elif num_mal > 0:
-            temp_w = [w for i in range(num_mal)]
-            w = temp_w
-    else:
+
+    elif attack_type == "opt":
         w, loss = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
 
+    else:
+        w, loss = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
+    if num_mal_temp > 0:
+        temp_w = [w for i in range(num_mal_temp)]
+        w = temp_w
+    elif num_mal > 0:
+        temp_w = [w for i in range(num_mal)]
+        w = temp_w
 
     return w, loss, args.attack_layers

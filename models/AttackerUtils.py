@@ -67,6 +67,7 @@ def test(model, dataset, args, backdoor=True):
     return acc_test.item(), back_acc
 
 
+# 返回的key-value 表示 每个参数的恶意程度
 def FLS(model_benign, model_malicious, BSR, mal_val_dataset, args):
     bad_weight = model_malicious.state_dict()
     key_arr = []
@@ -162,7 +163,7 @@ def layer_analysis_no_acc(model_param, args, mal_train_dataset, mal_val_dataset,
 
 def get_attacker_dataset(args, dataset_train=None, dataset_test=None):
     if args.local_dataset==1:
-        args.log.debug("use local malicious dataset")
+        args.log.debug(f"使用恶意客户端本地训练集划分mal_train_dataset和mal_val_dataset,进行BC生成")
         mal_train_dataset, mal_val_dataset = split_dataset(args.data)
         return mal_train_dataset, mal_val_dataset
     if args.dataset == 'cifar':
@@ -280,6 +281,7 @@ def get_key_value_bsr(model_param, args, mal_train_dataset, mal_val_dataset):
 
     model_benign = copy.deepcopy(model)
     acc, backdoor = test(copy.deepcopy(model_benign), mal_train_dataset, args)
+    # 先把良性模型训练到很好
     if args.dataset == 'cifar':
         min_acc = 93
     else:
@@ -290,6 +292,7 @@ def get_key_value_bsr(model_param, args, mal_train_dataset, mal_val_dataset):
         num_time += 1
         if num_time % 4 == 0:
             acc, _ = test(copy.deepcopy(model_benign), mal_train_dataset, args, False)
+            args.log.debug(f"本地优化良性模型 acc:{acc}")
             model = model_benign
             if num_time > 30:
                 if acc > 80:
@@ -299,6 +302,7 @@ def get_key_value_bsr(model_param, args, mal_train_dataset, mal_val_dataset):
     model_malicious.load_state_dict(model.state_dict())
     malicious_train(model_malicious, mal_train_dataset, args)
     acc, back_acc = test(model_malicious, mal_val_dataset, args)
+    args.log.debug(f"get_key_value_bsr中 恶意模型的 acc:{acc}, back_acc:{back_acc}")
     key_arr, value_arr = FLS(model_benign, model_malicious, back_acc, mal_val_dataset, args)
     return key_arr, value_arr, back_acc, model_benign.state_dict(), model_malicious.state_dict()
 
@@ -307,5 +311,6 @@ def get_key_value_bsr_local(local_model_benign, local_malicious_model, args, mal
     model_benign = copy.deepcopy(local_model_benign)
     model_malicious = copy.deepcopy(local_malicious_model)
     acc, back_acc = test(model_malicious, mal_val_dataset, args)
+    args.log.debug(f"get_key_value_bsr_local中 acc:{acc}, back_acc:{back_acc}")
     key_arr, value_arr = FLS(model_benign, model_malicious, back_acc, mal_val_dataset, args)
     return key_arr, value_arr, back_acc, model_benign.state_dict(), model_malicious.state_dict()

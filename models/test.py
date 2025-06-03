@@ -41,9 +41,9 @@ def test_img(net_g, datatest, args, test_backdoor=False):
         correct += y_pred.eq(target.data.view_as(y_pred)).long().cpu().sum()
         if test_backdoor:
             for k, image in enumerate(data):
-                if test_or_not(args, target[k]):  # one2one need test
+                if test_or_not(args, target[k]):  # 只修改不是目标标签的图片
                     data[k] = add_trigger(args,data[k], test=True)
-                    save_img(data[k])
+                    args.save_img(data[k])
                     target[k] = args.attack_label
                     back_num += 1
                 else:
@@ -82,7 +82,7 @@ def test_or_not(args, label):
         
         
 def save_img(image):
-        img = image
+        img = image.cpu()
         if image.shape[0] == 1:
             pixel_min = torch.min(img)
             img -= pixel_min
