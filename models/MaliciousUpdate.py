@@ -87,7 +87,7 @@ class LocalMaliciousUpdate(object):
         total_loss = 0.
         with torch.no_grad():
             for inputs, labels in self.ldr_train:
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs.to(self.args.device), labels.to(self.args.device)
                 # 嵌入触发器
                 inputs = t * m + (1 - m) * inputs
                 # 投毒后的标签都是2
@@ -120,7 +120,7 @@ class LocalMaliciousUpdate(object):
             for inputs, labels in self.ldr_train:
                 count += 1
                 t.requires_grad_()
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs.to(self.args.device), labels.to(self.args.device)
                 # 投毒数据
                 inputs = t * m + (1 - m) * inputs
                 # 修改恶意标签

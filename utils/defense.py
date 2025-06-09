@@ -50,7 +50,7 @@ def fltrust(params, central_param, global_parameters, args):
     score_list = []
     central_param_v = parameters_dict_to_vector_flt(central_param)
     central_norm = torch.norm(central_param_v)
-    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).to(args.device)
     sum_parameters = None
     for local_parameters in params:
         local_parameters_v = parameters_dict_to_vector_flt(local_parameters)
@@ -154,7 +154,7 @@ def compute_mmd(x, y):
 def flare(w_updates, w_locals, net, central_dataset, dataset_test, global_parameters, args):
     w_feature=[]
     temp_model = copy.deepcopy(net)
-    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).to(args.device)
     
     for client in w_locals:
         net.load_state_dict(client)
@@ -555,7 +555,7 @@ def compute_robustLR(params, args):
 
 
 def flame(local_model, update_params, global_model, args, debug=False):
-    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).to(args.device)
     cos_list=[]
     local_model_vector = []
     for param in local_model:
@@ -630,7 +630,7 @@ def flame(local_model, update_params, global_model, args, debug=False):
 
 
 def flame_analysis(local_model, args, debug=False):
-    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).to(args.device)
     cos_list=[]
     local_model_vector = []
     for param in local_model:
