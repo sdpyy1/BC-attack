@@ -100,11 +100,11 @@ if __name__ == '__main__':
 
     # 修改配置
     # badnet/lp_attack/opt
-    args.attack = 'lp_attack'
+    args.attack = 'badnet'
     # avg/medium/krum/muli_krum/RLR/flame
-    args.defence = 'flame'
+    args.defence = 'avg'
     # opt/square
-    args.trigger = 'opt'
+    args.trigger = 'square'
 
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
 
@@ -112,14 +112,14 @@ if __name__ == '__main__':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
         args.poison_frac = 1.0
 
-    args.save = './save/' + f"{args.attack}-{args.defence}-{args.trigger}"
+    args.save = './save/' + f"{args.attack}-{args.defence}-{args.trigger}-{args.dataset}-{args.model}"
     # 保存路径创建
     if not os.path.isdir(args.save):
         os.makedirs(args.save)
     # 日志系统启动
     log = utils.logUtils.init_logger(logging.DEBUG,args.save)
     if wandb_enable:
-        run = wandb.init(project="BCattack",name=args.save.replace("./save/",""))
+        run = wandb.init(project="optBC-exp",name=args.save.replace("./save/","").replace("adaptive","BC"),group="对照")
     args.log = log
 
     # 初始化自适应触发器
