@@ -12,7 +12,7 @@ from models.Update import LocalUpdate
 from options.config import read_config
 from utils.info import print_exp_details, write_info_to_accfile, get_base_info
 from options.options import args_parser
-from utils.sampling import mnist_iid, mnist_noniid, cifar_iid, cifar_noniid
+from utils.sampling import mnist_iid, mnist_noniid, cifar_iid, cifar_noniid,tinyimagenet_iid,tinyimagenet_noniid
 from utils.defense import fltrust, multi_krum, get_update, RLR, flame, get_update2, fld_distance, detection, detection1, \
     parameters_dict_to_vector_flt, lbfgs_torch, layer_krum, flare, median_aggregation
 from utils.text_helper import TextHelper
@@ -189,6 +189,24 @@ if __name__ == '__main__':
         dict_users = cifar_iid(dataset_train, args.num_users)
         dataset_test = helper.test_data
         args.helper = helper
+    elif args.dataset == 'tinyimagenet':
+        from data.tinyImageNet import TinyImageNetDataset  # 假设你将自定义类放在这个文件中
+
+        data_dir = '../data/tiny-imagenet-200'
+        transform = transforms.Compose([
+            transforms.Resize((64, 64)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5,), (0.5,))  # 可微调
+        ])
+
+        dataset_train = TinyImageNetDataset(data_dir, split='train', transform=transform)
+        dataset_test = TinyImageNetDataset(data_dir, split='val', transform=transform)
+
+        # 联邦划分（需要你定义 tinyimagenet_iid 和 tinyimagenet_noniid 函数）
+        if args.iid:
+            dict_users = tinyimagenet_iid(dataset_train, args.num_users)
+        else:
+            dict_users = tinyimagenet_noniid(dataset_train, args.num_users, args.p)
     else:
         raise NotImplementedError("Error: unrecognized dataset")
     log.debug(f"训练集加载成功,数据集大小: {len(dataset_train)}")
@@ -443,7 +461,8 @@ if __name__ == '__main__':
         # ------------------------------------------------------------------------------------------- INFO ----------------------------------------------------------------------------------------------- #
 
     best_acc, absr, bbsr = write_file(filename, val_acc_list, backdoor_acculist, args, True)
-
+    print("log save")
+    print(args)
     # plot loss curve
     plt.figure()
     plt.xlabel('communication')
