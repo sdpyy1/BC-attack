@@ -106,7 +106,7 @@ class LocalMaliciousUpdate(object):
         model.eval()
         ce_loss = torch.nn.CrossEntropyLoss()
         alpha = 0.3
-        K = 200
+        K = 50
         t = self.args.optTrigger.clone()
         m = self.args.mask.clone()
         normal_grad = 0.

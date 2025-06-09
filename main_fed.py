@@ -98,11 +98,11 @@ if __name__ == '__main__':
     # parse args
     args = read_config()
 
-
+    # 修改配置
     # badnet/lp_attack/opt
     args.attack = 'lp_attack'
     # avg/medium/krum/muli_krum/RLR/flame
-    args.defence = 'fltrust'
+    args.defence = 'flame'
     # opt/square
     args.trigger = 'opt'
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     if not os.path.isdir(args.save):
         os.makedirs(args.save)
     # 日志系统启动
-    log = utils.logUtils.init_logger(logging.ERROR,args.save)
+    log = utils.logUtils.init_logger(logging.DEBUG,args.save)
     if wandb_enable:
         run = wandb.init(project="BCattack",name=args.save.replace("./save/",""))
     args.log = log
