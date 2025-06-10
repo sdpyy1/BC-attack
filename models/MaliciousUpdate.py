@@ -106,7 +106,7 @@ class LocalMaliciousUpdate(object):
         model.eval()
         ce_loss = torch.nn.CrossEntropyLoss()
         alpha = 0.01
-        K = 50
+        K = 200
         t = self.args.optTrigger.clone()
         m = self.args.mask.clone()
         normal_grad = 0.
@@ -115,7 +115,7 @@ class LocalMaliciousUpdate(object):
         for i in range(K):
             if i % 10 == 0:
                 asr, loss = self.val_asr(model, t, m)
-                self.args.log.debug(f"local BSR -> asr:[{asr:.3f}],loss:[{loss:.3f}]")
+                self.args.log.debug(f"alpha:{alpha} K:{K} local BSR -> asr:[{asr:.3f}],loss:[{loss:.3f}]")
             # 投毒所有图片计算loss
             for inputs, labels in self.ldr_train:
                 count += 1

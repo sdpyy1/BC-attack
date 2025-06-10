@@ -93,20 +93,20 @@ def set_seed(seed):
 
 if __name__ == '__main__':
     # 是否启用wandb
-    wandb_enable = False
+    wandb_enable = True
     set_seed(0)
     # parse args
     args = read_config()
 
     # 修改配置
     # badnet/lp_attack/opt
-    args.attack = 'badnet'
+    args.attack = 'opt'
     # avg/medium/krum/muli_krum/RLR/flame
-    args.defence = 'flame'
+    args.defence = 'medium'
     # opt/square
-    args.trigger = 'square'
+    args.trigger = 'opt'
 
-    args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'mps')
+    args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
 
     if args.attack == 'lp_attack':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
@@ -122,14 +122,14 @@ if __name__ == '__main__':
         run = wandb.init(project="optBC-exp",name=args.save.replace("./save/","").replace("adaptive","BC"),group="对照")
     args.log = log
 
-    # 初始化自适应触发器`
+    # 初始化自适应触发器
     if args.trigger == 'opt':
         trigger_size = 5
-        args.optTrigger = torch.ones((1,3, 32, 32), requires_grad=False, device=args.device) * 0.5
+        args.optTrigger = torch.ones((1,3, 32, 32), requires_grad=False, device='cuda') * 0.5
         args.mask = torch.zeros_like(args.optTrigger)
         args.mask[:, :, args.triggerX:args.triggerX + trigger_size,
         args.triggerY:args.triggerY + trigger_size] = 1
-        args.mask = args.mask.to(args.device)
+        args.mask = args.mask.to('cuda')
 
     log.debug(f"运行设备: {args.device}")
     print_exp_details(log,args)

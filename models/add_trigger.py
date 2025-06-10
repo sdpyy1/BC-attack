@@ -86,5 +86,5 @@ def add_trigger(args, image, test=False):
         image = trigger*mask + image*(1-mask)
 
 
-    args.save_img(image)
+    # args.save_img(image)
     return image
