@@ -100,11 +100,11 @@ if __name__ == '__main__':
 
     # 修改配置
     # badnet/lp_attack/opt
-    args.attack = 'lp_attack'
+    args.attack = 'opt'
     # avg/medium/krum/muli_krum/RLR/flame
     args.defence = 'medium'
     # opt/square
-    args.trigger = 'square'
+    args.trigger = 'opt'
 
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
 
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     # 日志系统启动
     log = utils.logUtils.init_logger(logging.DEBUG,args.save)
     if wandb_enable:
-        run = wandb.init(project="BCattack",name=args.save.replace("./save/",""))
+        run = wandb.init(project="optBC-exp",name=args.save.replace("./save/",""))
     args.log = log
 
     # 初始化自适应触发器
