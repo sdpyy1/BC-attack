@@ -102,9 +102,9 @@ if __name__ == '__main__':
     # badnet/lp_attack/opt
     args.attack = 'lp_attack'
     # avg/medium/krum/muli_krum/RLR/flame
-    args.defence = 'flame'
+    args.defence = 'medium'
     # opt/square
-    args.trigger = 'opt'
+    args.trigger = 'square'
 
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
 
@@ -112,7 +112,7 @@ if __name__ == '__main__':
         args.attack = 'adaptive'  # adaptively control the number of attacking layers
         args.poison_frac = 1.0
 
-    args.save = './save/' + f"{args.attack}-{args.defence}-{args.trigger}"
+    args.save = './save/' + f"{args.attack}-{args.defence}-{args.trigger}-{args.dataset}-{args.model}"
     # 保存路径创建
     if not os.path.isdir(args.save):
         os.makedirs(args.save)
@@ -443,7 +443,7 @@ if __name__ == '__main__':
         # ------------------------------------------------------------------------------------------- INFO ----------------------------------------------------------------------------------------------- #
 
     best_acc, absr, bbsr = write_file(filename, val_acc_list, backdoor_acculist, args, True)
-
+    print(args)
     # plot loss curve
     plt.figure()
     plt.xlabel('communication')
