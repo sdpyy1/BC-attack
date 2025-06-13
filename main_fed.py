@@ -100,11 +100,13 @@ if __name__ == '__main__':
 
     # 修改配置
     # badnet/lp_attack/opt
-    args.attack = 'opt'
+    args.attack = 'lp_attack'
     # avg/medium/krum/muli_krum/RLR/flame
-    args.defence = 'medium'
+    args.defence = 'avg'
     # opt/square
     args.trigger = 'opt'
+    args.iid = 1
+    # args.dataset = 'mnist'
 
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
 
@@ -172,9 +174,10 @@ if __name__ == '__main__':
         if args.iid:
             dict_users = np.load('./data/iid_cifar.npy', allow_pickle=True).item()
         else:
+            log.debug("non-iid")
             # dict_users = np.load('./data/non_iid_cifar.npy', allow_pickle=True).item()
             dict_users = cifar_noniid([x[1] for x in dataset_train], args.num_users, 10, args.p)
-            log.debug('main_fed.py line 137 len(dict_users):', len(dict_users))
+            log.debug(f'main_fed.py line 137 len(dict_users):{len(dict_users)}')
     elif args.dataset == 'reddit':
         with open(f'./utils/words.yaml', 'r') as f:
             params_loaded = yaml.safe_load(f)

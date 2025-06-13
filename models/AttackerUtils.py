@@ -81,7 +81,7 @@ def FLS(model_benign, model_malicious, BSR, mal_val_dataset, args):
         acc, _, back_acc2 = test_img(net3, mal_val_dataset, args, test_backdoor=True)
         key_arr.append(key)
         value_arr.append(back_acc2 - BSR)
-
+    args.log.debug(f"finish FLS")
     return key_arr, value_arr
 
 
