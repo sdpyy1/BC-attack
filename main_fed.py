@@ -100,9 +100,9 @@ if __name__ == '__main__':
 
     # 修改配置
     # badnet/lp_attack/opt
-    args.attack = 'lp_attack'
+    args.attack = 'opt'
     # avg/medium/krum/muli_krum/RLR/flame
-    args.defence = 'avg'
+    args.defence = 'multikrum'
     # opt/square
     args.trigger = 'opt'
     args.iid = 1
