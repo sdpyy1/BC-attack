@@ -77,7 +77,33 @@ class LocalMaliciousUpdate(object):
 
     def add_trigger(self, image):
         return add_trigger(self.args, image)
+    def get_adv_model(self, model, dl, trigger, mask):
+        adv_model = copy.deepcopy(model)
+        adv_model.train()
+        ce_loss = torch.nn.CrossEntropyLoss()
+        adv_opt = torch.optim.SGD(adv_model.parameters(), lr = 0.01, momentum=0.9, weight_decay=5e-4)
+        # 设置为5
+        for _ in range(5):
+            for inputs, labels in dl:
+                # 输入被投毒，但输出仍然是原标签
+                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs = trigger*mask +(1-mask)*inputs
+                outputs = adv_model(inputs)
+                loss = ce_loss(outputs, labels)
+                adv_opt.zero_grad()
+                loss.backward()
+                adv_opt.step()
 
+        sim_sum = 0.
+        sim_count = 0.
+        cos_loss = torch.nn.CosineSimilarity(dim=0, eps=1e-08)
+        for name in dict(adv_model.named_parameters()):
+            if 'conv' in name: # 仅处理卷积层
+                sim_count += 1
+                # 计算生成的对抗模型和真实模型之间的余弦相似度
+                sim_sum += cos_loss(dict(adv_model.named_parameters())[name].grad.reshape(-1),\
+                                    dict(model.named_parameters())[name].grad.reshape(-1))
+        return adv_model, sim_sum/sim_count
     def val_asr(self, model , t, m):
         ce_loss = torch.nn.CrossEntropyLoss(label_smoothing=0.001)
         # 预测正确的
@@ -141,7 +167,68 @@ class LocalMaliciousUpdate(object):
         self.args.mask = m
         return True
 
-
+    def opt_trigger_dev(self, model):
+        adv_models = []
+        model.eval()
+        ce_loss = torch.nn.CrossEntropyLoss()
+        alpha = 0.01
+        K = 200
+        t = self.args.optTrigger.clone()
+        m = self.args.mask.clone()
+        normal_grad = 0.
+        count = 0
+        trigger_optim = torch.optim.Adam([t], lr=alpha * 10, weight_decay=0)
+        for i in range(K):
+            if i % 10 == 0:
+                asr, loss = self.val_asr(model, t, m)
+                self.args.log.debug(f"adv K:{K} alpha:{alpha} local BSR -> asr:[{asr:.3f}],loss:[{loss:.3f}]")
+                # dm_adv_K设置的是1，只有iter=0时会跳过下面的if
+                if i != 0:
+                    if len(adv_models) > 0:
+                        for adv_model in adv_models:
+                            del adv_model
+                    adv_models = []
+                    adv_ws = []
+                    for _ in range(1):
+                        # 获得一个对抗模型
+                        adv_model, adv_w = self.get_adv_model(model, self.ldr_train, t, m)
+                        adv_models.append(adv_model)
+                        adv_ws.append(adv_w)
+            # 投毒所有图片计算loss
+            for inputs, labels in self.ldr_train:
+                count += 1
+                t.requires_grad_()
+                inputs, labels = inputs.cuda(), labels.cuda()
+                # 投毒数据
+                inputs = t * m + (1 - m) * inputs
+                # 修改恶意标签
+                labels[:] = self.args.attack_label
+                outputs = model(inputs)
+                loss = ce_loss(outputs, labels)
+                if len(adv_models) > 0:
+                    for am_idx in range(len(adv_models)):
+                        # 计算刚才生成的对抗模型在投毒数据并且投毒标签下的损失
+                        adv_model = adv_models[am_idx]
+                        adv_w = adv_ws[am_idx]
+                        outputs = adv_model(inputs)
+                        nm_loss = ce_loss(outputs, labels)
+                        if loss == None:
+                            loss = 0.01 * adv_w * nm_loss / 1
+                        else:
+                            loss += 0.01 * adv_w * nm_loss / 1
+                # 根据loss来更新触发器
+                if loss != None:
+                    loss.backward()
+                    normal_grad += t.grad.sum()
+                    new_t = t - alpha * t.grad.sign()
+                    t = new_t.detach_()
+                    t = torch.clamp(t, min=-2, max=2)
+                    t.requires_grad_()
+        t = t.detach()
+        self.args.optTrigger = t
+        # 只修改了触发器，但是触发器位置并没有修改
+        self.args.mask = m
+        return True
     def trigger_data(self, images, labels):
         #  attack_goal == -1 means attack all label to attack_label
         if self.attack_goal == -1:
@@ -689,7 +776,7 @@ class LocalMaliciousUpdate(object):
         return sum(epoch_loss) / len(epoch_loss), malicious_info
     def train_malicious_opt(self, net, test_img=None, dataset_test=None, args=None):
         self.args.log.debug("开始自适应调整后门触发器")
-        self.opt_trigger(net)
+        self.opt_trigger_dev(net)
         self.args.log.debug("后门触发器调整结束")
         net.train()
         # train and update
