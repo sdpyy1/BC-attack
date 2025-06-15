@@ -43,7 +43,7 @@ def test_img(net_g, datatest, args, test_backdoor=False):
             for k, image in enumerate(data):
                 if test_or_not(args, target[k]):  # 只修改不是目标标签的图片
                     data[k] = add_trigger(args,data[k], test=True)
-                    #args.save_img(data[k])
+                    # args.save_img(data[k])
                     target[k] = args.attack_label
                     back_num += 1
                 else:

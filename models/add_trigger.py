@@ -32,7 +32,7 @@ def add_trigger(args, image, test=False):
         pixel_max = torch.max(image) if torch.max(image) > 1 else 1
         if args.dataset == 'cifar':
             pixel_max = 1
-        image[:, args.triggerY:args.triggerY + 5, args.triggerX:args.triggerX + 5] = pixel_max
+        image[:, args.triggerY:args.triggerY + args.triggerSize, args.triggerX:args.triggerX + args.triggerSize] = pixel_max    # 这里修改size
 
     elif args.trigger == 'pattern':
         pixel_max = torch.max(image) if torch.max(image) > 1 else 1
@@ -79,11 +79,11 @@ def add_trigger(args, image, test=False):
         max_pixel = max(torch.max(args.hallokitty), torch.max(image))
         image[image > max_pixel] = max_pixel
     # save the most recent backdoor image in test dataset
-    # args.save_img(image)
     elif args.trigger == 'opt':
         trigger = args.optTrigger.to(image.device)
         mask = args.mask.to(image.device)
         image = trigger*mask + image*(1-mask)
+    # args.save_img(image)
 
 
     return image

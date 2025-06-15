@@ -132,7 +132,7 @@ class LocalMaliciousUpdate(object):
         model.eval()
         ce_loss = torch.nn.CrossEntropyLoss()
         alpha = 0.1
-        K = 50
+        K = self.args.optK
         t = self.args.optTrigger.clone()
         m = self.args.mask.clone()
         normal_grad = 0.
@@ -284,9 +284,9 @@ class LocalMaliciousUpdate(object):
             return self.train_malicious_dba(net)
         elif self.attack == "LPA":
             return self.train_malicious_LPA(net)
-        elif self.attack == "adaptive":
+        elif self.attack == "BC":
             return self.train_malicious_adaptive(net)
-        elif self.attack == "adaptive_local":
+        elif self.attack == "BC_local":
             return self.train_malicious_adaptive_local(net)
         elif self.attack == 'subnet':
             return self.train_malicious_subnet(net)
@@ -876,7 +876,7 @@ class LocalMaliciousUpdate(object):
         return net.state_dict(), sum(epoch_loss) / len(epoch_loss)
     
     def save_img(self, image):
-        img = image.cpu()
+        img = image.clone().cpu()
         if image.shape[0] == 1:
             pixel_min = torch.min(img)
             img -= pixel_min
@@ -884,7 +884,7 @@ class LocalMaliciousUpdate(object):
             img /= pixel_max
             io.imsave('./save/backdoor_trigger.png', img_as_ubyte(img.squeeze().numpy()))
         else:
-            img = image.cpu().numpy()
+            img = image.clone().cpu().numpy()
             img = img.transpose(1, 2, 0)
             pixel_min = np.min(img)
             img -= pixel_min

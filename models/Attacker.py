@@ -437,7 +437,7 @@ def attacker(list_mal_client, num_mal, attack_type, dataset_train, dataset_test,
     if attack_type == "layerattack_ER_his" or attack_type == "LFA" or attack_type == "LPA":
         w, loss, args.attack_layers = local.train(net=copy.deepcopy(net_glob).to(args.device), test_img=test_img)
 
-    elif attack_type == "adaptive" or attack_type == "adaptive_local":
+    elif attack_type == "BC" or attack_type == "BC_local":
         if args.ada_mode == 20:
             temp_attack_layers = args.attack_layers
 

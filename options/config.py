@@ -85,6 +85,8 @@ def read_config():
     # *********trigger info*********
     #  square  apple  watermark
     parser.add_argument('--trigger', type=str, default='square',help="Kind of trigger")
+    parser.add_argument('--triggerSize', type=int, default='5',help="trigger size")
+    parser.add_argument('--optK', type=int, default='200',help="opt round")
     # mnist 28*28  cifar10 32*32
     parser.add_argument('--triggerX', type=int, default='27',help="position of trigger x-aix")
     parser.add_argument('--triggerY', type=int, default='27',help="position of trigger y-aix")

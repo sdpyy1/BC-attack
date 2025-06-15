@@ -85,6 +85,8 @@ def central_dataset_iid(dataset, dataset_size):
 def set_seed(seed):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ['HTTP_PROXY'] = str("http://127.0.0.1:7890")
+    os.environ['HTTPS_PROXY'] = str("http://127.0.0.1:7890")
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -100,37 +102,41 @@ if __name__ == '__main__':
 
     # 修改配置
     # badnet/lp_attack/opt
-    args.attack = 'opt'
-    # avg/medium/krum/muli_krum/RLR/flame
-    args.defence = 'multikrum'
+    args.attack = 'lp_attack'
+    # avg/medium/fltrust/multikrum/RLR/flame
+    args.defence = 'flame'
     # opt/square
     args.trigger = 'opt'
     args.iid = 1
     # args.dataset = 'mnist'
 
+
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
 
     if args.attack == 'lp_attack':
-        args.attack = 'adaptive'  # adaptively control the number of attacking layers
+        args.attack = 'BC'  # adaptively control the number of attacking layers
         args.poison_frac = 1.0
-
-    args.save = './save/' + f"{args.attack}-{args.defence}-{args.trigger}-{args.dataset}-{args.model}"
+    if args.attack == 'BC' and args.trigger == 'opt':
+        # args.save = './save/' + f"optBC-{args.defence}-{args.dataset}-{args.model}"
+        args.save = './save/' + f"optBC-{args.defence}[size={args.triggerSize}][k={args.optK}]"
+    else:
+        args.save = './save/' + f"{args.attack}-{args.defence}"
     # 保存路径创建
     if not os.path.isdir(args.save):
         os.makedirs(args.save)
     # 日志系统启动
     log = utils.logUtils.init_logger(logging.DEBUG,args.save)
     if wandb_enable:
-        run = wandb.init(project="optBC-exp",name=args.save.replace("./save/",""))
+        run = wandb.init(project="6.14 修复saveImg后整体测试",name=args.save.replace("./save/",""))
     args.log = log
 
     # 初始化自适应触发器
     if args.trigger == 'opt':
-        trigger_size = 5
+        trigger_size = args.triggerSize
+        log.debug(f"opt触发器大小: {trigger_size}")
         args.optTrigger = torch.ones((1,3, 32, 32), requires_grad=False, device='cuda') * 0.5
         args.mask = torch.zeros_like(args.optTrigger)
-        args.mask[:, :, args.triggerX:args.triggerX + trigger_size,
-        args.triggerY:args.triggerY + trigger_size] = 1
+        args.mask[:, :, args.triggerX:args.triggerX + trigger_size,args.triggerY:args.triggerY + trigger_size] = 1
         args.mask = args.mask.to('cuda')
 
     log.debug(f"运行设备: {args.device}")

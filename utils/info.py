@@ -33,7 +33,7 @@ def information(args):
     info.append(f'    Aggregation Function: {args.defence}')
     if math.isclose(args.malicious, 0) == False:
         info.append(f'    Attack method: {args.attack}')
-        if 'adaptive' in args.attack:
+        if 'BC' in args.attack:
             info.append(f'    Attack mode: {args.ada_mode}')
         info.append(f'    Attack tau: {args.tau}')
         info.append(f'    Fraction of malicious agents: {args.malicious*100}%')
@@ -85,7 +85,7 @@ def get_base_info(args):
                     args.model, args.defence, int(time.time()))
     if math.isclose(args.malicious, 0) == False:
         base_info = base_info + '_{}_{}malicious_{}poisondata'.format(args.attack, args.malicious, args.poison_frac)
-        if 'adaptive' in args.attack:
+        if 'BC' in args.attack:
             base_info += '_mode{}'.format(args.ada_mode)
     else:
         base_info = base_info + '_no_malicious'
